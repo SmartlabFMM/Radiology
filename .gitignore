@@ -1,0 +1,54 @@
+# Python-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments and Virtualenvs
+.venv/
+env/
+venv/
+bin/
+lib/
+develop-eggs/
+.env
+
+# Packaging and Distribution
+dist/
+build/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Odoo-specific
+# Local configuration files
+odoo.conf
+*.log
+# Local filestore (if your repo includes the odoo root)
+odoo/filestore/
+# Maintenance/migration scripts often ignored in core
+odoo/addons/base/maintenance/
+
+# Unit test / Coverage reports
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# Editor / IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
