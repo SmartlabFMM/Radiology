@@ -1,0 +1,33 @@
+<odoo>
+
+    <record id="res_partner_form_inherit_medical" model="ir.ui.view">
+        <field name="name">res.partner.form.medical</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Add tab inside notebook -->
+            <xpath expr="//notebook" position="inside">
+
+                <page string="Medical Information">
+
+                    <group>
+                        <group string="Roles">
+                            <field name="is_patient"/>
+                            <field name="is_radiologist"/>
+                        </group>
+
+                        <group string="Medical Info">
+                            <field name="medical_id"/>
+                            <field name="specialization"/>
+                        </group>
+                    </group>
+
+                </page>
+
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
