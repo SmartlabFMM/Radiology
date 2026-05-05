@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import ValidationError
-
+from odoo.fields import Datetime
+from datetime import datetime
 
 class RadiologyAppointment(models.Model):
     _name = "radiology.appointment"
@@ -120,8 +121,13 @@ class RadiologyAppointment(models.Model):
     # =========================
 
     def _check_machine_conflict(self, start, end, resource_id, exclude_id=None):
+
+        start = self._normalize_datetime_value(start)
+        end = self._normalize_datetime_value(end)
+
         domain = [
             ("resource_id", "=", resource_id),
+            ("state", "in", ["scheduled"]),
             ("date_start", "<", end),
             ("date_end", ">", start),
         ]
@@ -132,22 +138,40 @@ class RadiologyAppointment(models.Model):
         return self.search(domain, limit=1)
 
     def _normalize_many2one_value(self, value):
+        if not value:
+            return False
+
         if isinstance(value, (list, tuple)):
-            if not value:
-                return False
-            if value[0] in (0, 1, 4) and len(value) > 1:
-                return value[1]
-            if value[0] == 6 and len(value) > 2:
-                return value[2][0] if value[2] else False
-            return value[1] if len(value) > 1 else False
+            return value[0] if value else False
+
+        if hasattr(value, "id"):
+            return value.id
+
         return value
 
+    def _normalize_datetime_value(self, value):
+        if not value:
+            return False
+
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            return Datetime.from_string(value)
+
+        return False
+
     def _check_radiologist_conflict(self, start, end, radiologist_id, exclude_id=None):
+
         if not radiologist_id:
             return False
 
+        start = self._normalize_datetime_value(start)
+        end = self._normalize_datetime_value(end)
+
         domain = [
             ("radiologist_id", "=", radiologist_id),
+            ("state", "in", ["scheduled"]),
             ("date_start", "<", end),
             ("date_end", ">", start),
         ]
@@ -157,16 +181,28 @@ class RadiologyAppointment(models.Model):
 
         return self.search(domain, limit=1)
 
-    def _validate_no_conflict(self, start, end, resource_id, radiologist_id, exclude_id=None):
+    def _validate_no_conflict(self, start, end, resource_id, radiologist_id, state, exclude_id=None):
+
+        # 🚫 Skip if not scheduled
+        if state != "scheduled":
+            return
+
+        start = self._normalize_datetime_value(start)
+        end = self._normalize_datetime_value(end)
 
         if not start or not end or not resource_id:
             raise ValidationError("Start, end and machine are required.")
 
-        # machine conflict (HARD RULE)
+        if start >= end:
+            raise ValidationError("End must be after start.")
+
+        # 🚫 Skip conflict check if not scheduled
+        if state != "scheduled":
+            return
+
         if self._check_machine_conflict(start, end, resource_id, exclude_id):
             raise ValidationError("⚠ Machine already booked for this time slot!")
 
-        # radiologist conflict (HARD RULE)
         if self._check_radiologist_conflict(start, end, radiologist_id, exclude_id):
             raise ValidationError("⚠ Radiologist already busy in this time slot!")
 
@@ -182,42 +218,69 @@ class RadiologyAppointment(models.Model):
             end = vals.get("date_end") or vals.get("stop")
             resource = self._normalize_many2one_value(vals.get("resource_id"))
             radiologist = self._normalize_many2one_value(vals.get("radiologist_id"))
+            state = vals.get("state", "draft")
 
             self._validate_no_conflict(
                 start,
                 end,
                 resource,
                 radiologist,
+                state,
             )
 
         records = super().create(vals_list)
+
+        for rec in records:
+            if rec.date_start and rec.date_end and not rec.calendar_event_id:
+                rec._create_calendar_event()
 
         return records
 
     def write(self, vals):
 
         for rec in self:
+            # Get values (raw)
             start = vals.get("date_start") or vals.get("start") or rec.date_start
             end = vals.get("date_end") or vals.get("stop") or rec.date_end
-            resource = self._normalize_many2one_value(vals.get("resource_id", rec.resource_id.id))
-            radiologist = self._normalize_many2one_value(vals.get("radiologist_id", rec.radiologist_id.id))
+            state = vals.get("state", rec.state)
 
+            resource = vals.get("resource_id", rec.resource_id.id)
+            radiologist = vals.get("radiologist_id", rec.radiologist_id.id)
+
+            # 🔥 Normalize AFTER computing values
+            resource = self._normalize_many2one_value(resource)
+            radiologist = self._normalize_many2one_value(radiologist)
+
+            # Validate
             rec._validate_no_conflict(
                 start,
                 end,
                 resource,
                 radiologist,
-                exclude_id=rec.id
+                state,
+                rec.id
             )
 
+        # Write AFTER validation
         res = super().write(vals)
 
-        # sync calendar AFTER write
+        # Sync calendar AFTER write
         for rec in self:
-            if rec.calendar_event_id:
+            # create event if missing
+            if rec.state == "scheduled" and not rec.calendar_event_id:
+                rec._create_calendar_event()
+
+            # update event if exists
+            elif rec.calendar_event_id:
                 rec.calendar_event_id.write({
                     "start": rec.date_start,
                     "stop": rec.date_end,
+                    "name": f"Radiology - {rec.patient_id.name}",
+                    "partner_ids": [(6, 0, list(filter(None, [
+                        rec.patient_id.id,
+                        rec.radiologist_id.id,
+                    ])))],
+                    "description": rec.notes or "",
                 })
 
         return res
@@ -228,3 +291,20 @@ class RadiologyAppointment(models.Model):
 
     def is_machine_available(self, start, end, resource_id):
         return not self._check_machine_conflict(start, end, resource_id)
+    
+    @api.constrains('date_start', 'date_end', 'resource_id', 'radiologist_id')
+    def _check_conflict_constraint(self):
+        for rec in self:
+
+            # ✅ ONLY validate when scheduled
+            if rec.state != "scheduled":
+                continue
+
+            rec._validate_no_conflict(
+                rec.date_start,
+                rec.date_end,
+                rec.resource_id.id,
+                rec.radiologist_id.id,
+                rec.state,
+                rec.id
+            )
