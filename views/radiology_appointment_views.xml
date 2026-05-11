@@ -22,16 +22,18 @@
         <field name="arch" type="xml">
             <calendar
                 string="Radiology Schedule"
-                date_start="date_start"
-                date_stop="date_end"
+                date_start="start"
+                date_stop="stop"
                 color="resource_id"
-                event_open_popup="True"
+                quick_add="false"
+                create="false"
+                event_open_popup="true"
                 mode="week"
             >
-                <field name="patient_id"/>
-                <field name="resource_id"/>
-                <field name="state"/>
-                <field name="radiologist_id"/>
+                <field name="patient_id" required="1"/>
+                <field name="resource_id" required="1"/>
+                <field name="state" required="1"/>
+                <field name="radiologist_id" required="1"/>
             </calendar>
         </field>
     </record>

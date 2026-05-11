@@ -18,7 +18,7 @@ class RadiologyAppointment(models.Model):
         "res.partner",
         required=True,
         domain="[('is_patient', '=', True)]",
-        tracking=True,
+        default=lambda self: False
     )
 
     radiologist_id = fields.Many2one(
@@ -92,15 +92,23 @@ class RadiologyAppointment(models.Model):
     def _create_calendar_event(self):
         self.ensure_one()
 
+        attendees = list(filter(None, [
+            self.env.user.partner_id.id,   # current user
+            self.patient_id.id,
+            self.radiologist_id.id,
+        ]))
+
         event = self.env["calendar.event"].create({
             "name": f"Radiology - {self.patient_id.name}",
             "start": self.date_start,
             "stop": self.date_end,
+            "user_id": self.env.user.id,
             "partner_ids": [(6, 0, list(filter(None, [
                 self.patient_id.id,
                 self.radiologist_id.id
             ])))],
             "description": self.notes or "",
+            "show_as": "busy",
         })
 
         self.calendar_event_id = event.id
@@ -214,6 +222,9 @@ class RadiologyAppointment(models.Model):
     def create(self, vals_list):
 
         for vals in vals_list:
+            if not vals.get('patient_id'):
+                raise ValidationError("Patient is required")
+
             start = vals.get("date_start") or vals.get("start")
             end = vals.get("date_end") or vals.get("stop")
             resource = self._normalize_many2one_value(vals.get("resource_id"))
@@ -231,7 +242,12 @@ class RadiologyAppointment(models.Model):
         records = super().create(vals_list)
 
         for rec in records:
-            if rec.date_start and rec.date_end and not rec.calendar_event_id:
+            if (
+                rec.state == "scheduled"
+                and rec.date_start
+                and rec.date_end
+                and not rec.calendar_event_id
+            ):
                 rec._create_calendar_event()
 
         return records
@@ -239,7 +255,6 @@ class RadiologyAppointment(models.Model):
     def write(self, vals):
 
         for rec in self:
-            # Get values (raw)
             start = vals.get("date_start") or vals.get("start") or rec.date_start
             end = vals.get("date_end") or vals.get("stop") or rec.date_end
             state = vals.get("state", rec.state)
@@ -247,11 +262,9 @@ class RadiologyAppointment(models.Model):
             resource = vals.get("resource_id", rec.resource_id.id)
             radiologist = vals.get("radiologist_id", rec.radiologist_id.id)
 
-            # 🔥 Normalize AFTER computing values
             resource = self._normalize_many2one_value(resource)
             radiologist = self._normalize_many2one_value(radiologist)
 
-            # Validate
             rec._validate_no_conflict(
                 start,
                 end,
@@ -261,27 +274,53 @@ class RadiologyAppointment(models.Model):
                 rec.id
             )
 
-        # Write AFTER validation
         res = super().write(vals)
 
-        # Sync calendar AFTER write
         for rec in self:
-            # create event if missing
-            if rec.state == "scheduled" and not rec.calendar_event_id:
-                rec._create_calendar_event()
 
-            # update event if exists
-            elif rec.calendar_event_id:
-                rec.calendar_event_id.write({
-                    "start": rec.date_start,
-                    "stop": rec.date_end,
-                    "name": f"Radiology - {rec.patient_id.name}",
-                    "partner_ids": [(6, 0, list(filter(None, [
-                        rec.patient_id.id,
-                        rec.radiologist_id.id,
-                    ])))],
-                    "description": rec.notes or "",
-                })
+            # =========================
+            # CREATE EVENT
+            # =========================
+            if (
+                rec.state == "scheduled"
+                and rec.date_start
+                and rec.date_end
+            ):
+
+                if not rec.calendar_event_id:
+
+                    event = self.env["calendar.event"].create({
+                        "name": f"Radiology - {rec.patient_id.name}",
+                        "start": rec.date_start,
+                        "stop": rec.date_end,
+                        "user_id": self.env.user.id,
+                        "partner_ids": [(6, 0, list(filter(None, [
+                            rec.patient_id.id,
+                            rec.radiologist_id.id,
+                        ])))],
+                        "description": rec.notes or "",
+                    })
+
+                    rec.calendar_event_id = event.id
+
+                else:
+                    rec.calendar_event_id.write({
+                        "name": f"Radiology - {rec.patient_id.name}",
+                        "start": rec.date_start,
+                        "stop": rec.date_end,
+                        "partner_ids": [(6, 0, list(filter(None, [
+                            rec.patient_id.id,
+                            rec.radiologist_id.id,
+                        ])))],
+                        "description": rec.notes or "",
+                    })
+
+            # =========================
+            # DELETE EVENT IF CANCELLED
+            # =========================
+            elif rec.state in ["cancel"] and rec.calendar_event_id:
+                rec.calendar_event_id.unlink()
+                rec.calendar_event_id = False
 
         return res
 
