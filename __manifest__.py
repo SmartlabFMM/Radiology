@@ -26,13 +26,12 @@ Long description of module's purpose
     ],
 
     # always loaded
-    'data': [
-        # 'security/ir.model.access.csv',
-        
+    'data': [        
         'security/ir.model.access.csv',
         'views/radiology_appointment_views.xml',
         'views/menu.xml',
         'views/res_partner_medical_views.xml',
+        'views/radiology_working_hours_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

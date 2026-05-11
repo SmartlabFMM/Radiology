@@ -1,6 +1,6 @@
 <odoo>
 
-    <!-- LIST -->
+<!-- TREE / LIST -->
 <record id="view_radiology_appointment_list" model="ir.ui.view">
     <field name="name">radiology.appointment.list</field>
     <field name="model">radiology.appointment</field>
@@ -8,33 +8,32 @@
         <list>
             <field name="patient_id"/>
             <field name="resource_id"/>
-            <field name="date_start"/>
+            <field name="start"/>
+            <field name="stop"/>
             <field name="state"/>
             <field name="priority"/>
         </list>
     </field>
 </record>
 
-    <!-- CALENDAR VIEW -->
+    <!-- CALENDAR -->
     <record id="view_radiology_appointment_calendar" model="ir.ui.view">
         <field name="name">radiology.appointment.calendar</field>
         <field name="model">radiology.appointment</field>
         <field name="arch" type="xml">
-            <calendar
-                string="Radiology Schedule"
-                date_start="start"
-                date_stop="stop"
-                color="resource_id"
-                quick_add="false"
-                create="false"
-                event_open_popup="true"
-                mode="week"
-            >
-                <field name="patient_id" required="1"/>
-                <field name="resource_id" required="1"/>
-                <field name="state" required="1"/>
-                <field name="radiologist_id" required="1"/>
+
+            <calendar string="Radiology Schedule"
+                    date_start="start"
+                    date_stop="stop"
+                    mode="month"
+                    color="resource_id">
+
+                <field name="patient_id"/>
+                <field name="resource_id"/>
+                <field name="state"/>
+
             </calendar>
+
         </field>
     </record>
 
@@ -44,14 +43,8 @@
         <field name="model">radiology.appointment</field>
         <field name="arch" type="xml">
             <form>
-                <header>
-                    <button name="action_open_calendar_event"
-                            type="object"
-                            string="Open Calendar Event"
-                            class="btn-primary"/>
-                </header>
-
                 <sheet>
+
                     <group>
                         <field name="patient_id"/>
                         <field name="radiologist_id"/>
@@ -59,9 +52,9 @@
                     </group>
 
                     <group>
-                        <field name="date_start"/>
-                        <field name="date_end"/>
-                        <field name="duration"/>
+                        <field name="start"/>
+                        <field name="stop"/>
+                        <field name="duration" readonly="1"/>
                     </group>
 
                     <group>
@@ -70,6 +63,7 @@
                     </group>
 
                     <field name="notes"/>
+
                 </sheet>
             </form>
         </field>
@@ -79,7 +73,7 @@
     <record id="action_radiology_appointment" model="ir.actions.act_window">
         <field name="name">Appointments</field>
         <field name="res_model">radiology.appointment</field>
-        <field name="view_mode">calendar,list,form</field>
+        <field name="view_mode">calendar,tree,form</field>
     </record>
 
 </odoo>

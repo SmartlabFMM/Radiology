@@ -1,0 +1,104 @@
+<odoo>
+
+    <!-- =========================
+         ACTION
+    ========================== -->
+    <record id="action_radiology_working_hours" model="ir.actions.act_window">
+        <field name="name">Working Hours</field>
+        <field name="res_model">radiology.working.hours</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure working hours for machines and radiologists
+            </p>
+        </field>
+    </record>
+
+
+    <!-- =========================
+         TREE VIEW
+    ========================== -->
+    <record id="view_radiology_working_hours_tree" model="ir.ui.view">
+        <field name="name">radiology.working.hours.tree</field>
+        <field name="model">radiology.working.hours</field>
+        <field name="arch" type="xml">
+            <list string="Working Hours">
+
+                <field name="name"/>
+                <field name="resource_id"/>
+                <field name="radiologist_id"/>
+
+                <field name="weekday"/>
+                <field name="hour_from"/>
+                <field name="hour_to"/>
+
+                <field name="active"/>
+
+            </list>
+        </field>
+    </record>
+
+
+    <!-- =========================
+         FORM VIEW
+    ========================== -->
+    <record id="view_radiology_working_hours_form" model="ir.ui.view">
+        <field name="name">radiology.working.hours.form</field>
+        <field name="model">radiology.working.hours</field>
+        <field name="arch" type="xml">
+            <form string="Working Hours">
+
+                <sheet>
+
+                    <!-- TITLE -->
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="e.g. MRI Morning Shift"/>
+                        </h1>
+                    </div>
+
+                    <group>
+
+                        <!-- ASSIGNMENT -->
+                        <group string="Assignment">
+                            <field name="resource_id"/>
+                            <field name="radiologist_id"/>
+                            <field name="active"/>
+                        </group>
+
+                        <!-- TIME RULE -->
+                        <group string="Schedule">
+                            <field name="weekday"/>
+                            <field name="hour_from"/>
+                            <field name="hour_to"/>
+                        </group>
+
+                    </group>
+
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+
+    <!-- =========================
+         MENU STRUCTURE
+    ========================== -->
+
+    <menuitem id="menu_radiology_root"
+              name="Radiology"
+              sequence="10"/>
+
+    <menuitem id="menu_radiology_config"
+              name="Configuration"
+              parent="menu_radiology_root"
+              sequence="20"/>
+
+    <menuitem id="menu_radiology_working_hours"
+              name="Working Hours"
+              parent="menu_radiology_config"
+              action="action_radiology_working_hours"
+              sequence="10"/>
+
+</odoo>

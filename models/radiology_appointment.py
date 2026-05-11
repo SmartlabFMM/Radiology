@@ -1,16 +1,12 @@
 from odoo import models, fields, api
 from odoo.exceptions import ValidationError
-from odoo.fields import Datetime
 from datetime import datetime
+
 
 class RadiologyAppointment(models.Model):
     _name = "radiology.appointment"
     _description = "Radiology Appointment"
     _inherit = ["mail.thread", "mail.activity.mixin"]
-
-    # =========================
-    # FIELDS
-    # =========================
 
     name = fields.Char(default="New", tracking=True)
 
@@ -18,7 +14,7 @@ class RadiologyAppointment(models.Model):
         "res.partner",
         required=True,
         domain="[('is_patient', '=', True)]",
-        default=lambda self: False
+        tracking=True,
     )
 
     radiologist_id = fields.Many2one(
@@ -34,13 +30,13 @@ class RadiologyAppointment(models.Model):
         tracking=True,
     )
 
-    date_start = fields.Datetime(tracking=True)
-    date_end = fields.Datetime(tracking=True)
+    start = fields.Datetime(required=True, tracking=True)
+    stop = fields.Datetime(required=True, tracking=True)
 
-    duration = fields.Float(default=1.0)
+    duration = fields.Float(compute="_compute_duration", store=True)
 
     state = fields.Selection([
-        ("draft", "Waiting List"),
+        ("draft", "Draft"),
         ("scheduled", "Scheduled"),
         ("done", "Done"),
         ("cancel", "Cancelled"),
@@ -55,64 +51,44 @@ class RadiologyAppointment(models.Model):
 
     notes = fields.Text()
 
-    calendar_event_id = fields.Many2one(
-        "calendar.event",
-        string="Calendar Event",
-        ondelete="set null"
-    )
+    calendar_event_id = fields.Many2one("calendar.event")
 
-    # calendar compatibility fields
-    start = fields.Datetime(
-        compute="_compute_calendar_fields",
-        inverse="_inverse_calendar_fields",
-        store=True,
-    )
-
-    stop = fields.Datetime(
-        compute="_compute_calendar_fields",
-        inverse="_inverse_calendar_fields",
-        store=True,
-    )
-
-    # =========================
-    # CALENDAR SYNC
-    # =========================
-
-    @api.depends("date_start", "date_end")
-    def _compute_calendar_fields(self):
+    # -------------------------
+    # COMPUTE
+    # -------------------------
+    @api.depends("start", "stop")
+    def _compute_duration(self):
         for rec in self:
-            rec.start = rec.date_start
-            rec.stop = rec.date_end
+            if rec.start and rec.stop:
+                diff = rec.stop - rec.start
+                rec.duration = diff.total_seconds() / 3600
+            else:
+                rec.duration = 0.0
 
-    def _inverse_calendar_fields(self):
+    # -------------------------
+    # VALIDATION
+    # -------------------------
+    @api.constrains("start", "stop", "resource_id")
+    def _check_dates(self):
         for rec in self:
-            rec.date_start = rec.start
-            rec.date_end = rec.stop
+            if rec.start and rec.stop and rec.start >= rec.stop:
+                raise ValidationError("End must be after start")
 
+    # -------------------------
+    # CALENDAR EVENT
+    # -------------------------
     def _create_calendar_event(self):
-        self.ensure_one()
-
-        attendees = list(filter(None, [
-            self.env.user.partner_id.id,   # current user
-            self.patient_id.id,
-            self.radiologist_id.id,
-        ]))
-
-        event = self.env["calendar.event"].create({
-            "name": f"Radiology - {self.patient_id.name}",
-            "start": self.date_start,
-            "stop": self.date_end,
-            "user_id": self.env.user.id,
-            "partner_ids": [(6, 0, list(filter(None, [
-                self.patient_id.id,
-                self.radiologist_id.id
-            ])))],
-            "description": self.notes or "",
-            "show_as": "busy",
-        })
-
-        self.calendar_event_id = event.id
-        return event
+        for rec in self:
+            event = self.env["calendar.event"].create({
+                "name": f"Radiology - {rec.patient_id.name}",
+                "start": rec.start,
+                "stop": rec.stop,
+                "partner_ids": [(6, 0, [
+                    rec.patient_id.id,
+                    rec.radiologist_id.id
+                ])],
+            })
+            rec.calendar_event_id = event.id
 
     def action_open_calendar_event(self):
         self.ensure_one()
@@ -136,8 +112,8 @@ class RadiologyAppointment(models.Model):
         domain = [
             ("resource_id", "=", resource_id),
             ("state", "in", ["scheduled"]),
-            ("date_start", "<", end),
-            ("date_end", ">", start),
+            ("start", "<", end),
+            ("stop", ">", start),
         ]
 
         if exclude_id is not None:
@@ -180,8 +156,8 @@ class RadiologyAppointment(models.Model):
         domain = [
             ("radiologist_id", "=", radiologist_id),
             ("state", "in", ["scheduled"]),
-            ("date_start", "<", end),
-            ("date_end", ">", start),
+            ("start", "<", end),
+            ("stop", ">", start),
         ]
 
         if exclude_id is not None:
@@ -225,8 +201,8 @@ class RadiologyAppointment(models.Model):
             if not vals.get('patient_id'):
                 raise ValidationError("Patient is required")
 
-            start = vals.get("date_start") or vals.get("start")
-            end = vals.get("date_end") or vals.get("stop")
+            start = vals.get("start") or vals.get("start")
+            end = vals.get("stop") or vals.get("stop")
             resource = self._normalize_many2one_value(vals.get("resource_id"))
             radiologist = self._normalize_many2one_value(vals.get("radiologist_id"))
             state = vals.get("state", "draft")
@@ -244,8 +220,8 @@ class RadiologyAppointment(models.Model):
         for rec in records:
             if (
                 rec.state == "scheduled"
-                and rec.date_start
-                and rec.date_end
+                and rec.start
+                and rec.stop
                 and not rec.calendar_event_id
             ):
                 rec._create_calendar_event()
@@ -255,8 +231,8 @@ class RadiologyAppointment(models.Model):
     def write(self, vals):
 
         for rec in self:
-            start = vals.get("date_start") or vals.get("start") or rec.date_start
-            end = vals.get("date_end") or vals.get("stop") or rec.date_end
+            start = vals.get("start") or vals.get("start") or rec.start
+            end = vals.get("stop") or vals.get("stop") or rec.stop
             state = vals.get("state", rec.state)
 
             resource = vals.get("resource_id", rec.resource_id.id)
@@ -283,16 +259,16 @@ class RadiologyAppointment(models.Model):
             # =========================
             if (
                 rec.state == "scheduled"
-                and rec.date_start
-                and rec.date_end
+                and rec.start
+                and rec.stop
             ):
 
                 if not rec.calendar_event_id:
 
                     event = self.env["calendar.event"].create({
                         "name": f"Radiology - {rec.patient_id.name}",
-                        "start": rec.date_start,
-                        "stop": rec.date_end,
+                        "start": rec.start,
+                        "stop": rec.stop,
                         "user_id": self.env.user.id,
                         "partner_ids": [(6, 0, list(filter(None, [
                             rec.patient_id.id,
@@ -306,8 +282,8 @@ class RadiologyAppointment(models.Model):
                 else:
                     rec.calendar_event_id.write({
                         "name": f"Radiology - {rec.patient_id.name}",
-                        "start": rec.date_start,
-                        "stop": rec.date_end,
+                        "start": rec.start,
+                        "stop": rec.stop,
                         "partner_ids": [(6, 0, list(filter(None, [
                             rec.patient_id.id,
                             rec.radiologist_id.id,
@@ -331,7 +307,7 @@ class RadiologyAppointment(models.Model):
     def is_machine_available(self, start, end, resource_id):
         return not self._check_machine_conflict(start, end, resource_id)
     
-    @api.constrains('date_start', 'date_end', 'resource_id', 'radiologist_id')
+    @api.constrains('start', 'stop', 'resource_id', 'radiologist_id')
     def _check_conflict_constraint(self):
         for rec in self:
 
@@ -340,8 +316,8 @@ class RadiologyAppointment(models.Model):
                 continue
 
             rec._validate_no_conflict(
-                rec.date_start,
-                rec.date_end,
+                rec.start,
+                rec.stop,
                 rec.resource_id.id,
                 rec.radiologist_id.id,
                 rec.state,
