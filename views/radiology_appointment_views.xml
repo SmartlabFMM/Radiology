@@ -1,6 +1,6 @@
 <odoo>
 
-<!-- TREE / LIST -->
+<!-- LIST -->
 <record id="view_radiology_appointment_list" model="ir.ui.view">
     <field name="name">radiology.appointment.list</field>
     <field name="model">radiology.appointment</field>
@@ -73,7 +73,7 @@
     <record id="action_radiology_appointment" model="ir.actions.act_window">
         <field name="name">Appointments</field>
         <field name="res_model">radiology.appointment</field>
-        <field name="view_mode">calendar,tree,form</field>
+        <field name="view_mode">calendar,list,form</field>
     </record>
 
 </odoo>

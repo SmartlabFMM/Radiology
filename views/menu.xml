@@ -1,12 +1,13 @@
 <odoo>
 
-    <menuitem id="radiology_root"
+    <menuitem id="menu_radiology_root"
               name="Radiology"
               sequence="10"/>
 
-    <menuitem id="radiology_appointment_menu"
+    <menuitem id="menu_radiology_appointments"
               name="Appointments"
-              parent="radiology_root"
-              action="action_radiology_appointment"/>
+              parent="menu_radiology_root"
+              action="action_radiology_appointment"
+              sequence="10"/>
 
 </odoo>
