@@ -1,0 +1,57 @@
+<odoo>
+  <record id="view_radiology_slot_wizard_form" model="ir.ui.view">
+    <field name="name">radiology.slot.wizard.form</field>
+    <field name="model">radiology.slot.wizard</field>
+    <field name="arch" type="xml">
+      <form string="Book a Slot">
+        <group>
+          <field name="patient_id"/>
+          <field name="radiologist_id"/>
+          <field name="resource_id"/>
+          <field name="date"/>
+          <field name="duration"/>
+        </group>
+
+        <footer>
+          <button string="Find Available Slots"
+                  name="action_compute_slots"
+                  type="object"
+                  class="btn-primary"/>
+        </footer>
+
+        <separator string="Available Slots"/>
+
+        <field name="slot_ids" nolabel="1">
+          <list editable="bottom">
+            <field name="slot_start"/>
+            <field name="slot_end"/>
+            <field name="selected"/>
+          </list>
+        </field>
+
+        <footer>
+          <button string="Book Selected Slot"
+                  name="action_book"
+                  type="object"
+                  class="btn-success"/>
+          <button string="Cancel" class="btn-secondary" special="cancel"/>
+        </footer>
+      </form>
+    </field>
+  </record>
+
+  <!-- Action to open wizard -->
+  <record id="action_radiology_slot_wizard" model="ir.actions.act_window">
+    <field name="name">Book Appointment</field>
+    <field name="res_model">radiology.slot.wizard</field>
+    <field name="view_mode">form</field>
+    <field name="target">new</field>
+  </record>
+
+  <!-- Button in appointment list -->
+  <record id="action_radiology_appointment_list" model="ir.actions.act_window">
+    <field name="name">Appointments</field>
+    <field name="res_model">radiology.appointment</field>
+    <field name="view_mode">list,form</field>
+  </record>
+</odoo>

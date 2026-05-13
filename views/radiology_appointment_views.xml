@@ -49,13 +49,14 @@
                         <field name="patient_id"/>
                         <field name="radiologist_id"/>
                         <field name="resource_id"/>
-                    </group>
-
-                    <group>
-                        <field name="start"/>
-                        <field name="stop"/>
                         <field name="duration" readonly="1"/>
                     </group>
+
+                    <!-- ✅ Correct -->
+                    <button string="📅 Pick Available Slot"
+                            name="action_open_slot_wizard"
+                            type="object"
+                            class="btn-primary"/>
 
                     <group>
                         <field name="state"/>

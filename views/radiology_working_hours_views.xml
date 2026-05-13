@@ -22,61 +22,58 @@
         <field name="name">radiology.working.hours.list</field>
         <field name="model">radiology.working.hours</field>
         <field name="arch" type="xml">
-            <list string="Working Hours">
-
+            <list>
                 <field name="name"/>
-                <field name="resource_id"/>
-                <field name="radiologist_id"/>
-
-                <field name="weekday"/>
-                <field name="hour_from"/>
-                <field name="hour_to"/>
-
-                <field name="active"/>
-
+                <field name="line_ids">
+                    <list>
+                        <field name="weekday"/>
+                        <field name="hour_from"/>
+                        <field name="hour_to"/>
+                    </list>
+                </field>
             </list>
         </field>
     </record>
 
 
     <!-- =========================
-         FORM VIEW
+        FORM VIEW
     ========================== -->
     <record id="view_radiology_working_hours_form" model="ir.ui.view">
         <field name="name">radiology.working.hours.form</field>
         <field name="model">radiology.working.hours</field>
         <field name="arch" type="xml">
-            <form string="Working Hours">
+            <form>
+                <header>
+                    <button string="Pick Available Slot"
+                            name="action_open_slot_wizard"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"/>
+                </header>
 
                 <sheet>
-
-                    <!-- TITLE -->
-                    <div class="oe_title">
-                        <h1>
-                            <field name="name" placeholder="e.g. MRI Morning Shift"/>
-                        </h1>
-                    </div>
-
                     <group>
-
-                        <!-- ASSIGNMENT -->
-                        <group string="Assignment">
-                            <field name="resource_id"/>
-                            <field name="radiologist_id"/>
-                            <field name="active"/>
-                        </group>
-
-                        <!-- TIME RULE -->
-                        <group string="Schedule">
-                            <field name="weekday"/>
-                            <field name="hour_from"/>
-                            <field name="hour_to"/>
-                        </group>
-
+                        <field name="name"/>
+                        <field name="radiologist_id" required="1"/>
+                        <field name="resource_id" required="1"/>
+                        <field name="state" readonly="1"/>
                     </group>
 
-                </sheet>
+                    <notebook>
+                        <page string="Lines">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="weekday"/>
+                                    <field name="hour_from"/>
+                                    <field name="hour_to"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
 
+                </sheet>
             </form>
         </field>
     </record>

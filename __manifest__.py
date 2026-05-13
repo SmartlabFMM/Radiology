@@ -32,6 +32,7 @@ Long description of module's purpose
         'views/menu.xml',
         'views/res_partner_medical_views.xml',
         'views/radiology_working_hours_views.xml',
+        'views/radiology_slot_wizard_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
