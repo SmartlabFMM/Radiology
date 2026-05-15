@@ -6,8 +6,26 @@ class RadiologyWorkingHours(models.Model):
     _description = "Radiology Working Hours"
 
     name = fields.Char(required=True, default=lambda self: "New Working Hours")
-    resource_id = fields.Many2one("resource.resource", required=True)
-    radiologist_id = fields.Many2one("res.partner", required=True)
+    radiologist_id = fields.Many2one(
+        "res.partner",
+        domain="[('is_radiologist', '=', True)]",
+        tracking=True,
+        required=True,
+    )
+
+    resource_id = fields.Many2one(
+        "resource.resource",
+        string="Machine",
+        required=True,
+        tracking=True,
+    )
+
+    slot_duration = fields.Float(
+        string="Slot Duration (hours)",
+        default=0.5,
+        digits=(6, 2),
+        help="Each machine slot length, e.g. 0.5 for 30 minutes or 1.0 for 60 minutes.",
+    )
 
     line_ids = fields.One2many(
         "radiology.working.hours.line",

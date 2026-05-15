@@ -14,12 +14,11 @@ class RadiologySlotWizard(models.TransientModel):
                                       domain="[('is_radiologist','=',True)]")
     resource_id = fields.Many2one("resource.resource", string="Machine", required=True)
     date = fields.Date(required=True, default=fields.Date.today)
-    duration = fields.Selection([
-        ("0.5", "30 minutes"),
-        ("1.0", "1 hour"),
-        ("1.5", "1 hour 30 minutes"),
-        ("2.0", "2 hours"),
-    ], string="Duration", required=True, default="0.5")
+    duration = fields.Float(
+        string="Slot Duration (hours)",
+        readonly=True,
+        compute="_compute_duration",
+    )
 
     # --- Output ---
     slot_ids = fields.One2many("radiology.slot.wizard.line", "wizard_id",
@@ -31,6 +30,14 @@ class RadiologySlotWizard(models.TransientModel):
     def action_compute_slots(self):
         self.ensure_one()
         self.slot_ids.unlink()
+
+        if not self.resource_id or not self.radiologist_id:
+            raise ValidationError("Please choose both a machine and a radiologist.")
+
+        if self.duration <= 0:
+            raise ValidationError(
+                "Please configure a valid slot duration for the selected machine and radiologist."
+            )
 
         target_weekday = str(self.date.weekday())  # "0"=Mon … "6"=Sun
 
@@ -137,6 +144,19 @@ class RadiologySlotWizard(models.TransientModel):
         h = int(hour_float)
         m = int(round((hour_float - h) * 60))
         return datetime(day.year, day.month, day.day, h, m)
+
+    @api.depends("radiologist_id", "resource_id")
+    def _compute_duration(self):
+        for rec in self:
+            if rec.resource_id and rec.radiologist_id:
+                config = self.env["radiology.working.hours"].search([
+                    ("resource_id", "=", rec.resource_id.id),
+                    ("radiologist_id", "=", rec.radiologist_id.id),
+                    ("active", "=", True),
+                ], limit=1)
+                rec.duration = config.slot_duration if config else 0.0
+            else:
+                rec.duration = 0.0
 
     def _warn(self, msg):
         return {

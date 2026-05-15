@@ -30,8 +30,8 @@ class RadiologyAppointment(models.Model):
         tracking=True,
     )
 
-    start = fields.Datetime(required=True, tracking=True)
-    stop = fields.Datetime(required=True, tracking=True)
+    start = fields.Datetime( tracking=True)
+    stop = fields.Datetime( tracking=True)
 
     duration = fields.Float(compute="_compute_duration", store=True)
 

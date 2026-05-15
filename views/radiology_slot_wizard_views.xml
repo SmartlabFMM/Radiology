@@ -9,7 +9,7 @@
           <field name="radiologist_id"/>
           <field name="resource_id"/>
           <field name="date"/>
-          <field name="duration"/>
+          <field name="duration" readonly="1"/>
         </group>
 
         <footer>
