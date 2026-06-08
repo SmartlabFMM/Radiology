@@ -4,30 +4,26 @@
     <field name="model">radiology.slot.wizard</field>
     <field name="arch" type="xml">
       <form string="Book a Slot">
-        <group>
-          <field name="patient_id"/>
-          <field name="radiologist_id"/>
-          <field name="resource_id"/>
-          <field name="date"/>
-          <field name="duration" readonly="1"/>
-        </group>
+        <sheet>
+          <group>
+            <field name="patient_id"/>
+            <field name="radiologist_id"/>
+            <field name="resource_id"/>
+            <field name="date"/>
+            <field name="duration" readonly="1"/>
+          </group>
 
-        <footer>
-          <button string="Find Available Slots"
-                  name="action_compute_slots"
-                  type="object"
-                  class="btn-primary"/>
-        </footer>
+          <separator string="Available Slots"/>
 
-        <separator string="Available Slots"/>
-
-        <field name="slot_ids" nolabel="1">
-          <list editable="bottom">
-            <field name="slot_start"/>
-            <field name="slot_end"/>
-            <field name="selected"/>
-          </list>
-        </field>
+          <field name="slot_ids" nolabel="1">
+            <list create="false">
+              <field name="resource_id"/>
+              <field name="slot_start"/>
+              <field name="slot_end"/>
+              <field name="selected"/>
+            </list>
+          </field>
+        </sheet>
 
         <footer>
           <button string="Book Selected Slot"
