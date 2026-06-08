@@ -102,21 +102,25 @@ class RadiologyAppointment(models.Model):
 
     def action_open_slot_wizard(self):
         self.ensure_one()
-        default_date = False
+        default_date = fields.Date.today()
         if self.start:
-            default_date = fields.Date.to_string(self.start.date())
+            default_date = self.start.date()
+
+        wizard = self.env['radiology.slot.wizard'].create({
+            'appointment_id': self.id,
+            'patient_id': self.patient_id.id or False,
+            'radiologist_id': self.radiologist_id.id or False,
+            'resource_id': self.resource_id.id or False,
+            'date': default_date,
+        })
+        wizard._generate_slots()
 
         return {
-            "type": "ir.actions.act_window",
-            "res_model": "radiology.slot.wizard",
-            "view_mode": "form",
-            "target": "new",
-            "context": {
-                "default_patient_id": self.patient_id.id or False,
-                "default_radiologist_id": self.radiologist_id.id or False,
-                "default_resource_id": self.resource_id.id or False,
-                "default_date": default_date,
-            },
+            'type': 'ir.actions.act_window',
+            'res_model': 'radiology.slot.wizard',
+            'view_mode': 'form',
+            'res_id': wizard.id,
+            'target': 'new',
         }
 
     # =========================

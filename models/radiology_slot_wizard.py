@@ -9,8 +9,10 @@ _logger = logging.getLogger(__name__)
 class RadiologySlotWizard(models.TransientModel):
     _name = "radiology.slot.wizard"
     _description = "Available Slot Picker"
+    _rec_name = "date"
 
     # --- Inputs ---
+    appointment_id = fields.Many2one("radiology.appointment", string="Source Appointment")
     patient_id = fields.Many2one("res.partner", required=True,
                                   domain="[('is_patient','=',True)]")
     radiologist_id = fields.Many2one("res.partner", required=True,
@@ -22,21 +24,18 @@ class RadiologySlotWizard(models.TransientModel):
         readonly=True,
         compute="_compute_duration",
     )
-    # Field "slot_start" does not exist in model "radiology.slot.wizard"
-    # Field "slot_end" does not exist in model "radiology.slot.wizard"
-    # We will define these fields in the line model instead, as they are per-slot, not per-wizard.
-    # This is to avoid confusion and data integrity issues, since the wizard itself does not have a single start/end time, but each slot does.
-    # slot_start = fields.Datetime(string="Start", readonly=True, store=False)
-    # slot_end = fields.Datetime(string="End", readonly=True, store=False)
-    # we will move these fields to the RadiologySlotWizardLine model, as they are specific to each slot, not the wizard as a whole.
-    # This way, each slot line will have its own start and end time, which makes more sense given the data structure.
-    # The wizard itself is just a container for the selected date, radiologist, and machine, while the lines represent the individual available slots with their own start/end times.
-    # This also avoids confusion about which start/end time is being referred to when we talk about the wizard vs the slots.
-    # We will define slot_start and slot_end in the RadiologySlotWizardLine model, and remove them from the wizard model.
+
+    next_available_date = fields.Date(string="Next Available Date")
+    has_slots = fields.Boolean(compute="_compute_has_slots")
 
     # --- Output ---
     slot_ids = fields.One2many("radiology.slot.wizard.line", "wizard_id",
                                 string="Available Slots")
+
+    @api.depends("slot_ids")
+    def _compute_has_slots(self):
+        for rec in self:
+            rec.has_slots = bool(rec.slot_ids)
 
     # --------------------------------------------------
     # CORE: compute available slots for the chosen day
@@ -104,9 +103,21 @@ class RadiologySlotWizard(models.TransientModel):
 
         return slots
 
+    def _find_next_available_date(self, start_date, resource_id, radiologist_id, slot_duration):
+        if slot_duration <= 0 or not start_date or not resource_id or not radiologist_id:
+            return False
+        check_date = start_date + timedelta(days=1)
+        for i in range(30):
+            slots = self._build_slot_commands(check_date, resource_id, radiologist_id, slot_duration)
+            if slots:
+                return check_date
+            check_date += timedelta(days=1)
+        return False
+
     def _generate_slots(self):
         if not self.resource_id or not self.radiologist_id or not self.date:
             self.slot_ids = [(5, 0, 0)]
+            self.next_available_date = False
             return
 
         slot_duration = self._get_slot_duration(
@@ -115,6 +126,7 @@ class RadiologySlotWizard(models.TransientModel):
         )
         if slot_duration <= 0:
             self.slot_ids = [(5, 0, 0)]
+            self.next_available_date = False
             return
 
         slots = self._build_slot_commands(
@@ -127,90 +139,82 @@ class RadiologySlotWizard(models.TransientModel):
         # Use virtual commands: clear existing + add new slots
         self.slot_ids = [(5, 0, 0)] + slots
 
+        if not slots:
+            self.next_available_date = self._find_next_available_date(
+                self.date,
+                self.resource_id.id,
+                self.radiologist_id.id,
+                slot_duration,
+            )
+        else:
+            self.next_available_date = False
+
     @api.onchange("radiologist_id", "resource_id", "date")
     def _onchange_generate_slots(self):
         self._generate_slots()
 
     @api.model
     def default_get(self, field_names):
-        res = super().default_get(field_names)
-        default_date = res.get("date") or self.env.context.get("default_date")
-        resource_id = res.get("resource_id") or self.env.context.get("default_resource_id")
-        radiologist_id = res.get("radiologist_id") or self.env.context.get("default_radiologist_id")
+        """Standard defaults only; slot generation is done after record creation."""
+        return super().default_get(field_names)
 
-        if default_date and resource_id and radiologist_id:
-            # Convert string date to date object if needed
-            if isinstance(default_date, str):
-                from datetime import datetime as dt
-                default_date = dt.strptime(default_date, "%Y-%m-%d").date()
-            
-            slot_duration = self._get_slot_duration(resource_id, radiologist_id)
-            if slot_duration > 0:
-                slots = self._build_slot_commands(
-                    default_date,
-                    resource_id,
-                    radiologist_id,
-                    slot_duration,
-                )
-                if slots:
-                    res["slot_ids"] = slots
-        return res
-
-    def action_book(self):
+    def action_find_slots(self):
+        """Explicit 'Find Slots' button — saves the wizard first (object button behaviour),
+        then regenerates available slots and reopens the same record."""
         self.ensure_one()
-        selected = self.slot_ids.filtered("selected")
-        if len(selected) != 1:
-            raise ValidationError("Please select exactly one slot.")
+        self._generate_slots()
+        return self._reopen()
 
-        slot = selected[0]
-        
-        # Debug: Log slot data
-        _logger = __import__('logging').getLogger(__name__)
-        _logger.warning(f"Slot selected: ID={slot.id}, start={slot.slot_start}, end={slot.slot_end}, resource_id={slot.resource_id}")
-        
-        # If slot times are missing, recompute them
-        slot_start = slot.slot_start
-        slot_end = slot.slot_end
-        
-        if not slot_start or not slot_end:
-            # Recompute slots to get the correct times
-            _logger.warning("Slot times are empty, recomputing...")
-            slot_duration = self._get_slot_duration(
-                self.resource_id.id,
-                self.radiologist_id.id,
-            )
-            if slot_duration > 0:
-                recomputed_slots = self._build_slot_commands(
-                    self.date,
-                    self.resource_id.id,
-                    self.radiologist_id.id,
-                    slot_duration,
-                )
-                # Find the selected slot in recomputed list by index or position
-                if recomputed_slots and len(recomputed_slots) > 0:
-                    # Get the first recomputed slot (simplified - assumes slots are in same order)
-                    first_slot_data = recomputed_slots[0][2]
-                    slot_start = first_slot_data.get("slot_start")
-                    slot_end = first_slot_data.get("slot_end")
-        
-        # Validate slot has all required fields
-        if not slot_start:
-            raise ValidationError(f"Slot start time is empty. Please select a valid slot.")
-        if not slot_end:
-            raise ValidationError(f"Slot end time is empty. Please select a valid slot.")
-        
+    def action_prev_day(self):
+        self.ensure_one()
+        self.date = self.date - timedelta(days=1)
+        self._generate_slots()
+        return self._reopen()
+
+    def action_next_day(self):
+        self.ensure_one()
+        self.date = self.date + timedelta(days=1)
+        self._generate_slots()
+        return self._reopen()
+
+    def action_go_to_next_available_date(self):
+        self.ensure_one()
+        if self.next_available_date:
+            self.date = self.next_available_date
+            self._generate_slots()
+        return self._reopen()
+
+    def _book_slot(self, slot):
+        """Create or update the appointment from a given slot line."""
+        self.ensure_one()
+        if not slot.slot_start:
+            raise ValidationError("Slot start time is missing. Please try again.")
+        if not slot.slot_end:
+            raise ValidationError("Slot end time is missing. Please try again.")
+
         resource = slot.resource_id or self.resource_id
         if not resource:
-            raise ValidationError("Machine is not set. Please select a valid slot.")
+            raise ValidationError("Machine is not set on the slot.")
 
-        appointment = self.env["radiology.appointment"].create({
+        _logger.info(
+            "Booking slot: ID=%s, start=%s, end=%s, resource=%s",
+            slot.id, slot.slot_start, slot.slot_end, resource.name,
+        )
+
+        vals = {
             "patient_id": self.patient_id.id,
             "radiologist_id": self.radiologist_id.id,
             "resource_id": resource.id,
-            "start": slot_start,
-            "stop": slot_end,
+            "start": slot.slot_start,
+            "stop": slot.slot_end,
             "state": "scheduled",
-        })
+        }
+
+        if self.appointment_id:
+            self.appointment_id.write(vals)
+            appointment = self.appointment_id
+        else:
+            appointment = self.env["radiology.appointment"].create(vals)
 
         return {
             "type": "ir.actions.act_window",
@@ -276,15 +280,11 @@ class RadiologySlotWizardLine(models.TransientModel):
     _description = "Slot Line"
 
     wizard_id = fields.Many2one("radiology.slot.wizard", ondelete="cascade")
-    resource_id = fields.Many2one("resource.resource", string="Machine", readonly=True, store=True)
-    slot_start = fields.Datetime(string="Start", readonly=True, store=True)
-    slot_end = fields.Datetime(string="End", readonly=True, store=True)
-    selected = fields.Boolean(string="Pick", store=True)
+    resource_id = fields.Many2one("resource.resource", string="Machine", store=True)
+    slot_start = fields.Datetime(string="Start", store=True)
+    slot_end = fields.Datetime(string="End", store=True)
 
-    @api.onchange("selected")
-    def _onchange_selected(self):
-        if not self.selected or not self.wizard_id:
-            return
-        for line in self.wizard_id.slot_ids:
-            if line != self:
-                line.selected = False
+    def action_select_and_book(self):
+        """One-click booking: book this slot immediately."""
+        self.ensure_one()
+        return self.wizard_id._book_slot(self)

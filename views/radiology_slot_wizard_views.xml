@@ -5,32 +5,63 @@
     <field name="arch" type="xml">
       <form string="Book a Slot">
         <sheet>
+          <field name="appointment_id" invisible="1"/>
+          <field name="has_slots" invisible="1"/>
+          <field name="next_available_date" invisible="1"/>
+
           <group>
-            <field name="patient_id"/>
-            <field name="radiologist_id"/>
-            <field name="resource_id"/>
-            <field name="date"/>
-            <field name="duration" readonly="1"/>
+            <group>
+              <field name="patient_id"/>
+              <field name="radiologist_id"/>
+              <field name="resource_id"/>
+            </group>
+            <group>
+              <label for="date" string="Choose Date"/>
+              <div class="o_row">
+                <button name="action_prev_day" string="◀" type="object" class="btn btn-secondary oe_inline"/>
+                <field name="date" class="oe_inline"/>
+                <button name="action_next_day" string="▶" type="object" class="btn btn-secondary oe_inline"/>
+              </div>
+              <field name="duration" readonly="1"/>
+            </group>
           </group>
 
-          <separator string="Available Slots"/>
+          <!-- Find Slots button: saves the form first (object button), then loads slots -->
+          <div class="text-center mb-3" invisible="has_slots">
+            <button name="action_find_slots"
+                    string="🔍 Find Available Slots"
+                    type="object"
+                    class="btn btn-primary btn-lg"/>
+          </div>
 
-          <field name="slot_ids" nolabel="1">
-            <list create="false">
-              <field name="resource_id"/>
-              <field name="slot_start"/>
-              <field name="slot_end"/>
-              <field name="selected"/>
+          <!-- Alert: no slots, next date known -->
+          <div class="alert alert-warning text-center" role="alert" invisible="has_slots or not next_available_date">
+              No slots available on this day. Next available date is <strong><field name="next_available_date" class="oe_inline"/></strong>.
+              <button name="action_go_to_next_available_date" string="Go to Next Available Date" type="object" class="btn btn-warning btn-sm ms-2"/>
+          </div>
+          <!-- Alert: no slots anywhere in 30 days -->
+          <div class="alert alert-danger text-center" role="alert" invisible="has_slots or next_available_date">
+              No slots available on this day or within the next 30 days. Please verify working hours or choose another machine/radiologist.
+          </div>
+
+          <separator string="Available Slots" invisible="not has_slots"/>
+
+          <!-- One-click booking: click "Book" on any row, done. No checkboxes needed. -->
+          <field name="slot_ids" nolabel="1" invisible="not has_slots">
+            <list create="false" edit="false" delete="false">
+              <field name="slot_start" string="Start"/>
+              <field name="slot_end" string="End"/>
+              <field name="resource_id" string="Machine"/>
+              <button name="action_select_and_book"
+                      string="📅 Book This Slot"
+                      type="object"
+                      class="btn-success"/>
             </list>
           </field>
         </sheet>
 
         <footer>
-          <button string="Book Selected Slot"
-                  name="action_book"
-                  type="object"
-                  class="btn-success"/>
-          <button string="Cancel" class="btn-secondary" special="cancel"/>
+          <button string="Close" class="btn-secondary" special="cancel"/>
         </footer>
       </form>
     </field>
